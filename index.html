@@ -123,7 +123,7 @@ if (!SpeechRecognition) {
 
   rec.onerror = (e) => {
     estaEscuchando = false;
-    console.log("Error de reconocimiento:", e.error);
+    console.log("Error de reconocimiento.:", e.error);
     if (e.error === 'not-allowed') {
       estado.innerHTML = "❌ Permiso de micrófono denegado.";
     } else if (e.error === 'no-speech') {
