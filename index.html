@@ -21,7 +21,7 @@ button:active{transform:scale(0.9)}
 /* Input alternativo oculto por defecto */
 #tecladoInput{width:100%;padding:12px;border-radius:12px;border:1px solid #2d3748;background:#1f2937;color:#fff;display:none;outline:none}
 
-/* Alerta visual para iOS/Safari */
+/* Alerta visual exclusiva para Safari nativo en iOS */
 .alerta-safari{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(8,16,24,0.95);display:none;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center;z-index:10;border-radius:25px}
 .alerta-safari h3{color:#ffc107;margin-bottom:15px}
 .alerta-safari p{font-size:14px;color:#cbd5e1;margin-bottom:20px;line-height:1.6}
@@ -67,12 +67,13 @@ const tecladoInput=document.getElementById("tecladoInput");
 let voz; 
 let estaEscuchando = false;
 
-// DETECCIÓN: Saber si es Safari corriendo en un iPhone/iPad
-const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-const esSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+// DETECCIÓN ESTRICTA: Filtra si es iOS y descarta Chrome, CriOS, FxiOS y EdgiOS
+const ua = navigator.userAgent;
+const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+const esSafariNativo = /Safari/.test(ua) && !/CriOS/.test(ua) && !/FxiOS/.test(ua) && !/EdgiOS/.test(ua) && !/Chrome/.test(ua);
 
-if (esIOS && esSafari) {
-  // Mostramos el aviso sugerente si es el Safari de un celular
+// El modal SOLO se muestra si es verdaderamente Safari en iOS
+if (esIOS && esSafariNativo) {
   alertaSafari.style.display = "flex";
 }
 
@@ -110,14 +111,14 @@ if(!SpeechRecognition){
    if ('speechSynthesis' in window) {
      window.speechSynthesis.cancel();
      const textoLimpio = textoAPronunciar.replace(/<[^>]*>/g, "");
-     voz = new SpeechSynthesisUtterance(textoLinter = textoLimpio);
+     voz = new SpeechSynthesisUtterance(textoLimpio);
      voz.lang = "es-CO";
      window.speechSynthesis.speak(voz);
    }
  }
 
  mic.onclick=()=>{
-   hablarTexto(""); // Hack inicial de audio para iOS
+   hablarTexto(""); // Hack de audio
    if(estaEscuchando) { rec.stop(); return; }
    try{ rec.start(); }catch(e){ console.log(e); }
  };
@@ -153,7 +154,6 @@ if(!SpeechRecognition){
    estaEscuchando = false;
    console.log("Error controlado:", e.error);
    
-   // Si salta el bendito error de Safari o bloquean el micro, mutamos al teclado de inmediato
    if(e.error === 'service-not-allowed' || e.error === 'not-allowed') {
      activarModoTeclado("Error de Safari. Modo texto activado:");
    } else {
@@ -169,7 +169,6 @@ if(!SpeechRecognition){
  };
 }
 
-// Lógica del input de texto alternativo (Funciona al pulsar Enter)
 tecladoInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter" && tecladoInput.value.trim() !== "") {
     procesarTrámite(tecladoInput.value);
