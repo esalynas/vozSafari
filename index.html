@@ -7,139 +7,175 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI,sans-serif}
 body{height:100vh;display:flex;justify-content:center;align-items:center;background:#081018;color:#fff}
-.chat{width:420px;height:700px;background:#111827;border-radius:25px;display:flex;flex-direction:column;overflow:hidden;border:1px solid #2d3748}
+.chat{width:420px;height:700px;background:#111827;border-radius:25px;display:flex;flex-direction:column;overflow:hidden;border:1px solid #2d3748;position:relative}
 .header{padding:18px;background:#1e293b;color:#8bd3ff;font-weight:bold}
 .messages{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .bot,.user{padding:12px 16px;border-radius:18px;max-width:80%;line-height:1.5}
 .bot{background:#1f2937;align-self:flex-start}
 .user{background:#157347;align-self:flex-end}
-.footer{padding:18px;text-align:center;border-top:1px solid #243244}
-button{width:75px;height:75px;border:none;border-radius:50%;font-size:34px;cursor:pointer;background:#2196f3;color:#fff}
-#estado{margin-top:10px;color:#8bd3ff}
+.footer{padding:18px;text-align:center;border-top:1px solid #243244;display:flex;flex-direction:column;align-items:center;gap:10px}
+button{width:75px;height:75px;border:none;border-radius:50%;font-size:34px;cursor:pointer;background:#2196f3;color:#fff;transition:transform 0.2s}
+button:active{transform:scale(0.9)}
+#estado{margin-top:5px;color:#8bd3ff;font-size:14px}
+
+/* Input alternativo oculto por defecto */
+#tecladoInput{width:100%;padding:12px;border-radius:12px;border:1px solid #2d3748;background:#1f2937;color:#fff;display:none;outline:none}
+
+/* Alerta visual para iOS/Safari */
+.alerta-safari{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(8,16,24,0.95);display:none;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center;z-index:10;border-radius:25px}
+.alerta-safari h3{color:#ffc107;margin-bottom:15px}
+.alerta-safari p{font-size:14px;color:#cbd5e1;margin-bottom:20px;line-height:1.6}
+.btn-alerta{width:auto;height:auto;padding:12px 20px;font-size:14px;border-radius:10px;background:#ffc107;color:#000;font-weight:bold;margin-bottom:10px}
+.btn-continuar{background:transparent;color:#8bd3ff;font-size:13px;text-decoration:underline;cursor:pointer;border:none;width:auto;height:auto}
 </style>
 </head>
 <body>
+
 <div class="chat">
-<div class="header">🤖 Agente IA - Control de Legalidad</div>
-<div class="messages" id="chat">
-<div class="bot">
-Hola 👋<br><br>Oprime el micrófono y di:<br><br>
-<b>Dame el control de legalidad para constitución</b><br><br>
-o<br><br>
-<b>Dame el control de legalidad para nombramiento</b>
-</div>
-</div>
-<div class="footer">
-<button id="mic">🎤</button>
-<div id="estado">Pulsa para hablar</div>
-</div>
+  <div class="alerta-safari" id="alertaSafari">
+    <h3>⚠️ Nota para Safari en iOS</h3>
+    <p>El reconocimiento de voz de Apple suele restringir el micrófono en este navegador. Te recomendamos abrir este proyecto en <b>Google Chrome</b>.</p>
+    <button class="btn-alerta" id="btnCopiar">📋 Copiar enlace del proyecto</button>
+    <button class="btn-continuar" id="btnContinuar">Prefiero escribir los comandos aquí</button>
+  </div>
+
+  <div class="header">🤖 Agente IA - Control de Legalidad</div>
+  <div class="messages" id="chat">
+    <div class="bot">
+      Hola 👋<br><br>Oprime el micrófono y di (o escribe):<br><br>
+      <b>Dame el control de legalidad para constitución</b><br><br>
+      o<br><br>
+      <b>Dame el control de legalidad para nombramiento</b>
+    </div>
+  </div>
+  <div class="footer">
+    <button id="mic">🎤</button>
+    <div id="estado">Pulsa para hablar</div>
+    <input type="text" id="tecladoInput" placeholder="Escribe aquí tu comando y pulsa Enter...">
+  </div>
 </div>
 
 <script>
-const chat = document.getElementById("chat");
-const estado = document.getElementById("estado");
-const mic = document.getElementById("mic");
+const chat=document.getElementById("chat");
+const estado=document.getElementById("estado");
+const mic=document.getElementById("mic");
+const alertaSafari=document.getElementById("alertaSafari");
+const btnCopiar=document.getElementById("btnCopiar");
+const btnContinuar=document.getElementById("btnContinuar");
+const tecladoInput=document.getElementById("tecladoInput");
 
 let voz; 
-let rec;
 let estaEscuchando = false;
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// DETECCIÓN: Saber si es Safari corriendo en un iPhone/iPad
+const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const esSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-if (!SpeechRecognition) {
-  estado.innerHTML = "❌ Este navegador no soporta reconocimiento de voz.";
-} else {
-  // Inicializamos el reconocimiento de forma limpia
-  rec = new SpeechRecognition();
-  rec.lang = "es-CO";
-  rec.continuous = false;
-  rec.interimResults = false;
-  rec.maxAlternatives = 1;
-
-  // Función exclusiva para hablar (así garantizamos que Safari herede el click del usuario)
-  function hablarTexto(textoAPronunciar) {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Limpia cualquier audio previo
-      
-      // Limpiar etiquetas HTML para la lectura de voz
-      const textoLimpio = textoAPronunciar.replace(/<[^>]*>/g, "");
-      voz = new SpeechSynthesisUtterance(textoLimpio);
-      voz.lang = "es-CO";
-      
-      // Forzar volumen y velocidad estables para iOS
-      voz.volume = 1;
-      voz.rate = 1;
-      
-      window.speechSynthesis.speak(voz);
-    }
-  }
-
-  mic.onclick = () => {
-    // 1. Desbloqueo inmediato de audio exigido por Safari/iOS
-    hablarTexto(""); 
-
-    if (estaEscuchando) {
-      try { rec.stop(); } catch(e){}
-      return;
-    }
-
-    try {
-      rec.start();
-    } catch (e) {
-      console.log("Error al iniciar:", e);
-      // Si ya estaba corriendo, lo reiniciamos de forma segura
-      rec.stop();
-      setTimeout(() => { rec.start(); }, 200);
-    }
-  };
-
-  rec.onstart = () => {
-    estaEscuchando = true;
-    estado.innerHTML = "🎙️ Escuchando...";
-  };
-
-  rec.onresult = (e) => {
-    estaEscuchando = false;
-    const texto = e.results[0][0].transcript.toLowerCase();
-    
-    // Mostrar lo que dijo el usuario
-    chat.innerHTML += `<div class="user">${texto}</div>`;
-
-    let respuesta = "No encontré ese trámite. Prueba diciendo constitución o nombramiento.";
-    if (texto.includes("constitución") || texto.includes("constitucion")) {
-       respuesta = `Por supuesto.<br><br>Según la Superintendencia los controles de legalidad para <b>Constitución</b> son:<br><br>✅ Control de homonimia<br>✅ Objeto social<br>✅ Capitales<br>✅ Firma del representante legal`;
-    } else if (texto.includes("nombramiento")) {
-       respuesta = `Claro.<br><br>Los controles de legalidad para <b>Nombramiento</b> son:<br><br>✅ Órgano competente<br>✅ Cumple quórum<br>✅ Cumple convocatoria<br>✅ Cumple SIPREF`;
-    }
-
-    // Insertar en el chat
-    chat.innerHTML += `<div class="bot">${respuesta}</div>`;
-    chat.scrollTop = chat.scrollHeight;
-    
-    // Ejecutar la voz inmediatamente
-    hablarTexto(respuesta);
-    estado.innerHTML = "✅ Consulta finalizada";
-  };
-
-  rec.onerror = (e) => {
-    estaEscuchando = false;
-    console.log("Error de reconocimiento.:", e.error);
-    if (e.error === 'not-allowed') {
-      estado.innerHTML = "❌ Permiso de micrófono denegado.";
-    } else if (e.error === 'no-speech') {
-      estado.innerHTML = "❌ No se detectó voz.";
-    } else {
-      estado.innerHTML = "❌ Error: " + e.error;
-    }
-  };
-
-  rec.onend = () => {
-    estaEscuchando = false;
-    if (estado.innerHTML === "🎙️ Escuchando...") {
-      estado.innerHTML = "Pulsa para hablar";
-    }
-  };
+if (esIOS && esSafari) {
+  // Mostramos el aviso sugerente si es el Safari de un celular
+  alertaSafari.style.display = "flex";
 }
+
+// Lógica de los botones del aviso
+btnCopiar.onclick = () => {
+  navigator.clipboard.writeText(window.location.href);
+  btnCopiar.innerHTML = "✅ ¡Enlace copiado! Pégalo en Chrome";
+  setTimeout(() => { btnCopiar.innerHTML = "📋 Copiar enlace del proyecto"; }, 3000);
+};
+
+btnContinuar.onclick = () => {
+  alertaSafari.style.display = "none";
+  activarModoTeclado("Safari detectado. Modo texto activado.");
+};
+
+function activarModoTeclado(mensaje) {
+  mic.style.display = "none";
+  tecladoInput.style.display = "block";
+  estado.innerHTML = "⌨️ " + mensaje;
+}
+
+// Configuración del Reconocimiento de Voz
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+if(!SpeechRecognition){
+ activarModoTeclado("Tu navegador no soporta voz. Usa el teclado:");
+}else{
+ const rec=new SpeechRecognition();
+ rec.lang="es-CO";
+ rec.continuous=false;
+ rec.interimResults=false;
+ rec.maxAlternatives=1;
+
+ function hablarTexto(textoAPronunciar) {
+   if ('speechSynthesis' in window) {
+     window.speechSynthesis.cancel();
+     const textoLimpio = textoAPronunciar.replace(/<[^>]*>/g, "");
+     voz = new SpeechSynthesisUtterance(textoLinter = textoLimpio);
+     voz.lang = "es-CO";
+     window.speechSynthesis.speak(voz);
+   }
+ }
+
+ mic.onclick=()=>{
+   hablarTexto(""); // Hack inicial de audio para iOS
+   if(estaEscuchando) { rec.stop(); return; }
+   try{ rec.start(); }catch(e){ console.log(e); }
+ };
+
+ rec.onstart=()=>{
+   estaEscuchando = true;
+   estado.innerHTML="🎙️ Escuchando...";
+ };
+
+ function procesarTrámite(texto) {
+   const inputNormalizado = texto.toLowerCase();
+   chat.innerHTML+=`<div class="user">${texto}</div>`;
+
+   let respuesta="No encontré ese trámite. Intenta con 'constitución' o 'nombramiento'.";
+   if(inputNormalizado.includes("constitución")||inputNormalizado.includes("constitucion")){
+      respuesta=`Por supuesto.<br><br>Según la Superintendencia los controles de legalidad para <b>Constitución</b> son:<br><br>✅ Control de homonimia<br>✅ Objeto social<br>✅ Capitales<br>✅ Firma del representante legal`;
+   }else if(inputNormalizado.includes("nombramiento")){
+      respuesta=`Claro.<br><br>Los controles de legalidad para <b>Nombramiento</b> son:<br><br>✅ Órgano competente<br>✅ Cumple quórum<br>✅ Cumple convocatoria<br>✅ Cumple SIPREF`;
+   }
+
+   chat.innerHTML+=`<div class="bot">${respuesta}</div>`;
+   chat.scrollTop=chat.scrollHeight;
+   hablarTexto(respuesta);
+   estado.innerHTML="✅ Consulta finalizada";
+ }
+
+ rec.onresult=(e)=>{
+   estaEscuchando = false;
+   procesarTrámite(e.results[0][0].transcript);
+ };
+
+ rec.onerror=(e)=>{
+   estaEscuchando = false;
+   console.log("Error controlado:", e.error);
+   
+   // Si salta el bendito error de Safari o bloquean el micro, mutamos al teclado de inmediato
+   if(e.error === 'service-not-allowed' || e.error === 'not-allowed') {
+     activarModoTeclado("Error de Safari. Modo texto activado:");
+   } else {
+     estado.innerHTML="❌ Error: "+e.error;
+   }
+ };
+
+ rec.onend=()=>{
+   estaEscuchando = false;
+   if(estado.innerHTML==="🎙️ Escuchando..."){
+      estado.innerHTML="Pulsa para hablar";
+   }
+ };
+}
+
+// Lógica del input de texto alternativo (Funciona al pulsar Enter)
+tecladoInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter" && tecladoInput.value.trim() !== "") {
+    procesarTrámite(tecladoInput.value);
+    tecladoInput.value = "";
+  }
+});
 </script>
 </body>
 </html>
