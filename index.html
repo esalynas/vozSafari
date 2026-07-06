@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulación 06 - Control de Legalidad IA</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI,sans-serif}
+body{height:100vh;display:flex;justify-content:center;align-items:center;background:#081018;color:#fff}
+.chat{width:420px;height:700px;background:#111827;border-radius:25px;display:flex;flex-direction:column;overflow:hidden;border:1px solid #2d3748}
+.header{padding:18px;background:#1e293b;color:#8bd3ff;font-weight:bold}
+.messages{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.bot,.user{padding:12px 16px;border-radius:18px;max-width:80%;line-height:1.5}
+.bot{background:#1f2937;align-self:flex-start}
+.user{background:#157347;align-self:flex-end}
+.footer{padding:18px;text-align:center;border-top:1px solid #243244}
+button{width:75px;height:75px;border:none;border-radius:50%;font-size:34px;cursor:pointer;background:#2196f3;color:#fff}
+#estado{margin-top:10px;color:#8bd3ff}
+</style>
+</head>
+<body>
+<div class="chat">
+<div class="header">🤖 Agente IA - Control de Legalidad</div>
+<div class="messages" id="chat">
+<div class="bot">
+Hola 👋<br><br>Oprime el micrófono y di:<br><br>
+<b>Dame el control de legalidad para constitución</b><br><br>
+o<br><br>
+<b>Dame el control de legalidad para nombramiento</b>
+</div>
+</div>
+<div class="footer">
+<button id="mic">🎤</button>
+<div id="estado">Pulsa para hablar</div>
+</div>
+</div>
+
+<script>
+const chat=document.getElementById("chat");
+const estado=document.getElementById("estado");
+const mic=document.getElementById("mic");
+
+let voz; 
+let escuchando = false; // Flag para controlar el estado real en Safari
+
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+if(!SpeechRecognition){
+ estado.innerHTML="❌ Este navegador no soporta reconocimiento de voz.";
+}else{
+
+ const rec=new SpeechRecognition();
+ rec.lang="es-CO";
+ rec.continuous=false;
+ rec.interimResults=false;
+ rec.maxAlternatives=1;
+
+ mic.onclick=()=>{
+   speechSynthesis.cancel();
+   
+   // HACK ampliado para iOS: Desbloquea el canal de audio inmediatamente
+   const activadoriOS = new SpeechSynthesisUtterance("");
+   speechSynthesis.speak(activadoriOS);
+
+   if(!escuchando){
+     try{
+       rec.start();
+     }catch(e){
+       console.log(e);
+     }
+   }
+ };
+
+ rec.onstart=()=>{
+   escuchando = true;
+   estado.innerHTML="🎙️ Escuchando...";
+ };
+
+ rec.onresult=(e)=>{
+   escuchando = false; 
+   const texto=e.results[0][0].transcript.toLowerCase();
+   chat.innerHTML+=`<div class="user">${texto}</div>`;
+
+   let respuesta="No encontré ese trámite.";
+   if(texto.includes("constitución")||texto.includes("constitucion")){
+      respuesta=`Por supuesto.<br><br>Según la Superintendencia los controles de legalidad para <b>Constitución</b> son:<br><br>✅ Control de homonimia<br>✅ Objeto social<br>✅ Capitales<br>✅ Firma del representante legal`;
+   }else if(texto.includes("nombramiento")){
+      respuesta=`Claro.<br><br>Los controles de legalidad para <b>Nombramiento</b> son:<br><br>✅ Órgano competente<br>✅ Cumple quórum<br>✅ Cumple convocatoria<br>✅ Cumple SIPREF`;
+   }
+
+   // Renderizado inmediato en el chat para evitar lag visual
+   chat.innerHTML+=`<div class="bot">${respuesta}</div>`;
+   chat.scrollTop=chat.scrollHeight;
+   
+   // La voz se ejecuta FUERA del setTimeout para que Safari no la bloquee
+   voz = new SpeechSynthesisUtterance(respuesta.replace(/<[^>]*>/g,""));
+   voz.lang="es-CO";
+   speechSynthesis.speak(voz);
+   
+   estado.innerHTML="✅ Consulta finalizada";
+ };
+
+ rec.onerror=(e)=>{
+   escuchando = false;
+   if(e.error !== 'no-speech') {
+     estado.innerHTML="❌ Error: "+e.error;
+   }
+   console.log(e);
+ };
+
+ rec.onend=()=>{
+   if(escuchando){
+      estado.innerHTML="No escuché ninguna respuesta.";
+      escuchando = false;
+   }
+ };
+}
+</script>
+</body>
+</html>
