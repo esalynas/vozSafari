@@ -18,10 +18,9 @@ button{width:75px;height:75px;border:none;border-radius:50%;font-size:34px;curso
 button:active{transform:scale(0.9)}
 #estado{margin-top:5px;color:#8bd3ff;font-size:14px}
 
-/* Input alternativo oculto por defecto */
 #tecladoInput{width:100%;padding:12px;border-radius:12px;border:1px solid #2d3748;background:#1f2937;color:#fff;display:none;outline:none}
 
-/* Alerta visual exclusiva para Safari nativo en iOS */
+/* El modal ahora está oculto al inicio obligatoriamente */
 .alerta-safari{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(8,16,24,0.95);display:none;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center;z-index:10;border-radius:25px}
 .alerta-safari h3{color:#ffc107;margin-bottom:15px}
 .alerta-safari p{font-size:14px;color:#cbd5e1;margin-bottom:20px;line-height:1.6}
@@ -33,8 +32,8 @@ button:active{transform:scale(0.9)}
 
 <div class="chat">
   <div class="alerta-safari" id="alertaSafari">
-    <h3>⚠️ Nota para Safari en iOS</h3>
-    <p>El reconocimiento de voz de Apple suele restringir el micrófono en este navegador. Te recomendamos abrir este proyecto en <b>Google Chrome</b>.</p>
+    <h3>⚠️ Restricción de Safari detectada</h3>
+    <p>El motor de voz de Apple ha bloqueado el micrófono. Te sugerimos copiar este enlace y usarlo en <b>Google Chrome</b>, o continuar usando el teclado integrado.</p>
     <button class="btn-alerta" id="btnCopiar">📋 Copiar enlace del proyecto</button>
     <button class="btn-continuar" id="btnContinuar">Prefiero escribir los comandos aquí</button>
   </div>
@@ -42,7 +41,7 @@ button:active{transform:scale(0.9)}
   <div class="header">🤖 Agente IA - Control de Legalidad</div>
   <div class="messages" id="chat">
     <div class="bot">
-      Hola 👋<br><br>Oprime el micrófono y di (o escribe):<br><br>
+      Hola 👋<br><br>Oprime el micrófono y di:<br><br>
       <b>Dame el control de legalidad para constitución</b><br><br>
       o<br><br>
       <b>Dame el control de legalidad para nombramiento</b>
@@ -67,17 +66,8 @@ const tecladoInput=document.getElementById("tecladoInput");
 let voz; 
 let estaEscuchando = false;
 
-// DETECCIÓN ESTRICTA: Filtra si es iOS y descarta Chrome, CriOS, FxiOS y EdgiOS
-const ua = navigator.userAgent;
-const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-const esSafariNativo = /Safari/.test(ua) && !/CriOS/.test(ua) && !/FxiOS/.test(ua) && !/EdgiOS/.test(ua) && !/Chrome/.test(ua);
+// Eliminamos por completo la detección al cargar la página para evitar falsos positivos.
 
-// El modal SOLO se muestra si es verdaderamente Safari en iOS
-if (esIOS && esSafariNativo) {
-  alertaSafari.style.display = "flex";
-}
-
-// Lógica de los botones del aviso
 btnCopiar.onclick = () => {
   navigator.clipboard.writeText(window.location.href);
   btnCopiar.innerHTML = "✅ ¡Enlace copiado! Pégalo en Chrome";
@@ -86,16 +76,16 @@ btnCopiar.onclick = () => {
 
 btnContinuar.onclick = () => {
   alertaSafari.style.display = "none";
-  activarModoTeclado("Safari detectado. Modo texto activado.");
+  activarModoTeclado("Modo texto activado de forma alternativa.");
 };
 
 function activarModoTeclado(mensaje) {
   mic.style.display = "none";
   tecladoInput.style.display = "block";
   estado.innerHTML = "⌨️ " + mensaje;
+  tecladoInput.focus();
 }
 
-// Configuración del Reconocimiento de Voz
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 if(!SpeechRecognition){
@@ -118,7 +108,7 @@ if(!SpeechRecognition){
  }
 
  mic.onclick=()=>{
-   hablarTexto(""); // Hack de audio
+   hablarTexto(""); 
    if(estaEscuchando) { rec.stop(); return; }
    try{ rec.start(); }catch(e){ console.log(e); }
  };
@@ -152,10 +142,13 @@ if(!SpeechRecognition){
 
  rec.onerror=(e)=>{
    estaEscuchando = false;
-   console.log("Error controlado:", e.error);
+   console.log("Error capturado:", e.error);
    
-   if(e.error === 'service-not-allowed' || e.error === 'not-allowed') {
-     activarModoTeclado("Error de Safari. Modo texto activado:");
+   // REACCIÓN EN TIEMPO REAL: Si el navegador falla con este error específico, mostramos el modal justo en ese instante.
+   if(e.error === 'service-not-allowed') {
+     alertaSafari.style.display = "flex";
+   } else if (e.error === 'not-allowed') {
+     activarModoTeclado("Permiso denegado. Usa el teclado:");
    } else {
      estado.innerHTML="❌ Error: "+e.error;
    }
