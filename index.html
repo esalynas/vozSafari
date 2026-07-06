@@ -36,84 +36,109 @@ o<br><br>
 </div>
 
 <script>
-const chat=document.getElementById("chat");
-const estado=document.getElementById("estado");
-const mic=document.getElementById("mic");
+const chat = document.getElementById("chat");
+const estado = document.getElementById("estado");
+const mic = document.getElementById("mic");
 
 let voz; 
-let escuchando = false; // Flag para controlar el estado real en Safari
+let rec;
+let estaEscuchando = false;
 
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-if(!SpeechRecognition){
- estado.innerHTML="❌ Este navegador no soporta reconocimiento de voz.";
-}else{
+if (!SpeechRecognition) {
+  estado.innerHTML = "❌ Este navegador no soporta reconocimiento de voz.";
+} else {
+  // Inicializamos el reconocimiento de forma limpia
+  rec = new SpeechRecognition();
+  rec.lang = "es-CO";
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
 
- const rec=new SpeechRecognition();
- rec.lang="es-CO";
- rec.continuous=false;
- rec.interimResults=false;
- rec.maxAlternatives=1;
+  // Función exclusiva para hablar (así garantizamos que Safari herede el click del usuario)
+  function hablarTexto(textoAPronunciar) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Limpia cualquier audio previo
+      
+      // Limpiar etiquetas HTML para la lectura de voz
+      const textoLimpio = textoAPronunciar.replace(/<[^>]*>/g, "");
+      voz = new SpeechSynthesisUtterance(textoLimpio);
+      voz.lang = "es-CO";
+      
+      // Forzar volumen y velocidad estables para iOS
+      voz.volume = 1;
+      voz.rate = 1;
+      
+      window.speechSynthesis.speak(voz);
+    }
+  }
 
- mic.onclick=()=>{
-   speechSynthesis.cancel();
-   
-   // HACK ampliado para iOS: Desbloquea el canal de audio inmediatamente
-   const activadoriOS = new SpeechSynthesisUtterance("");
-   speechSynthesis.speak(activadoriOS);
+  mic.onclick = () => {
+    // 1. Desbloqueo inmediato de audio exigido por Safari/iOS
+    hablarTexto(""); 
 
-   if(!escuchando){
-     try{
-       rec.start();
-     }catch(e){
-       console.log(e);
-     }
-   }
- };
+    if (estaEscuchando) {
+      try { rec.stop(); } catch(e){}
+      return;
+    }
 
- rec.onstart=()=>{
-   escuchando = true;
-   estado.innerHTML="🎙️ Escuchando...";
- };
+    try {
+      rec.start();
+    } catch (e) {
+      console.log("Error al iniciar:", e);
+      // Si ya estaba corriendo, lo reiniciamos de forma segura
+      rec.stop();
+      setTimeout(() => { rec.start(); }, 200);
+    }
+  };
 
- rec.onresult=(e)=>{
-   escuchando = false; 
-   const texto=e.results[0][0].transcript.toLowerCase();
-   chat.innerHTML+=`<div class="user">${texto}</div>`;
+  rec.onstart = () => {
+    estaEscuchando = true;
+    estado.innerHTML = "🎙️ Escuchando...";
+  };
 
-   let respuesta="No encontré ese trámite.";
-   if(texto.includes("constitución")||texto.includes("constitucion")){
-      respuesta=`Por supuesto.<br><br>Según la Superintendencia los controles de legalidad para <b>Constitución</b> son:<br><br>✅ Control de homonimia<br>✅ Objeto social<br>✅ Capitales<br>✅ Firma del representante legal`;
-   }else if(texto.includes("nombramiento")){
-      respuesta=`Claro.<br><br>Los controles de legalidad para <b>Nombramiento</b> son:<br><br>✅ Órgano competente<br>✅ Cumple quórum<br>✅ Cumple convocatoria<br>✅ Cumple SIPREF`;
-   }
+  rec.onresult = (e) => {
+    estaEscuchando = false;
+    const texto = e.results[0][0].transcript.toLowerCase();
+    
+    // Mostrar lo que dijo el usuario
+    chat.innerHTML += `<div class="user">${texto}</div>`;
 
-   // Renderizado inmediato en el chat para evitar lag visual
-   chat.innerHTML+=`<div class="bot">${respuesta}</div>`;
-   chat.scrollTop=chat.scrollHeight;
-   
-   // La voz se ejecuta FUERA del setTimeout para que Safari no la bloquee
-   voz = new SpeechSynthesisUtterance(respuesta.replace(/<[^>]*>/g,""));
-   voz.lang="es-CO";
-   speechSynthesis.speak(voz);
-   
-   estado.innerHTML="✅ Consulta finalizada";
- };
+    let respuesta = "No encontré ese trámite. Prueba diciendo constitución o nombramiento.";
+    if (texto.includes("constitución") || texto.includes("constitucion")) {
+       respuesta = `Por supuesto.<br><br>Según la Superintendencia los controles de legalidad para <b>Constitución</b> son:<br><br>✅ Control de homonimia<br>✅ Objeto social<br>✅ Capitales<br>✅ Firma del representante legal`;
+    } else if (texto.includes("nombramiento")) {
+       respuesta = `Claro.<br><br>Los controles de legalidad para <b>Nombramiento</b> son:<br><br>✅ Órgano competente<br>✅ Cumple quórum<br>✅ Cumple convocatoria<br>✅ Cumple SIPREF`;
+    }
 
- rec.onerror=(e)=>{
-   escuchando = false;
-   if(e.error !== 'no-speech') {
-     estado.innerHTML="❌ Error: "+e.error;
-   }
-   console.log(e);
- };
+    // Insertar en el chat
+    chat.innerHTML += `<div class="bot">${respuesta}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+    
+    // Ejecutar la voz inmediatamente
+    hablarTexto(respuesta);
+    estado.innerHTML = "✅ Consulta finalizada";
+  };
 
- rec.onend=()=>{
-   if(escuchando){
-      estado.innerHTML="No escuché ninguna respuesta.";
-      escuchando = false;
-   }
- };
+  rec.onerror = (e) => {
+    estaEscuchando = false;
+    console.log("Error de reconocimiento:", e.error);
+    if (e.error === 'not-allowed') {
+      estado.innerHTML = "❌ Permiso de micrófono denegado.";
+    } else if (e.error === 'no-speech') {
+      estado.innerHTML = "❌ No se detectó voz.";
+    } else {
+      estado.innerHTML = "❌ Error: " + e.error;
+    }
+  };
+
+  rec.onend = () => {
+    estaEscuchando = false;
+    if (estado.innerHTML === "🎙️ Escuchando...") {
+      estado.innerHTML = "Pulsa para hablar";
+    }
+  };
 }
 </script>
 </body>
